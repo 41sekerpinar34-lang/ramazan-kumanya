@@ -13,8 +13,21 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Ramazan Kumanyası", // Burayı düzelttik
-  description: "İhtiyaç sahiplerine destek olun.", // Burayı düzelttik
+  // BURAYA KENDİ SİTE ADRESİNİ YAZ (Sonunda slaş / olmasın)
+  metadataBase: new URL('https://ramazan-kumanya.vercel.app'), 
+  
+  title: "Ramazan Kumanyası",
+  description: "İhtiyaç sahiplerine destek olun, iftar sofralarına ortak olun.",
+  
+  // WhatsApp ve Twitter için açıkça belirtelim
+  openGraph: {
+    title: "Ramazan Kumanyası",
+    description: "İhtiyaç sahiplerine destek olun.",
+    url: 'https://ramazan-kumanya.vercel.app',
+    siteName: 'Ramazan Kumanyası',
+    locale: 'tr_TR',
+    type: 'website',
+  },
 };
 
 export default function RootLayout({
@@ -23,7 +36,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="tr"> 
+    <html lang="tr">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
