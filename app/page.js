@@ -1,7 +1,7 @@
 // app/page.js
 "use client";
 import { useEffect, useState } from "react";
-import { db } from "@/firebase";
+import { db } from "./firebase";
 import { doc, onSnapshot, collection } from "firebase/firestore";
 import { Share2, CreditCard, ShoppingBag, PackageCheck } from "lucide-react";
 

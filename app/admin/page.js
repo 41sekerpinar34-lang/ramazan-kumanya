@@ -1,7 +1,7 @@
 // app/admin/page.js
 "use client";
 import { useState, useEffect } from "react";
-import { db } from "@/firebase";
+import { db } from "../firebase";
 import { doc, getDoc, updateDoc, collection, addDoc, getDocs, deleteDoc } from "firebase/firestore";
 
 export default function Admin() {
