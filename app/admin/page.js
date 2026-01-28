@@ -1,143 +1,168 @@
 // app/admin/page.js
 "use client";
 import { useState, useEffect } from "react";
-import { db } from "../../lib/firebase";
-import { doc, getDoc, updateDoc, collection, addDoc, getDocs, deleteDoc } from "firebase/firestore";
+import { db } from "../../lib/firebase"; // Dosya yoluna dikkat
+import { doc, getDoc, updateDoc, collection, getDocs, addDoc, deleteDoc } from "firebase/firestore";
 
 export default function Admin() {
   const [form, setForm] = useState({
     toplananSayi: 0, hedefSayi: 0, birimFiyat: 0, slogan: "",
-    logoUrl: "", urunResmi: "", icerikMetni: ""
+    logoUrl: "", urunResmi: "", icerikMetni: "",
+    // YENİ EKLENEN BANKA AYARLARI
+    bankaAdi: "", iban: "", aliciAdi: "", adminEmail: ""
   });
-  const [bagisForm, setBagisForm] = useState({ isim: "", adet: 1 });
-  const [bagislar, setBagislar] = useState([]);
+  
+  const [bekleyenler, setBekleyenler] = useState([]);
   const [yukleniyor, setYukleniyor] = useState(false);
 
-  useEffect(() => { verileriGetir(); bagislariGetir(); }, []);
+  // Onaylama işlemi için geçici state
+  const [onayIsmi, setOnayIsmi] = useState("");
+  const [seciliBekleyen, setSeciliBekleyen] = useState(null);
+
+  useEffect(() => { verileriGetir(); bekleyenleriGetir(); }, []);
 
   const verileriGetir = async () => {
     const docSnap = await getDoc(doc(db, "ayarlar", "genel"));
     if (docSnap.exists()) setForm(docSnap.data());
   };
 
-  const bagislariGetir = async () => {
-    const q = await getDocs(collection(db, "bagislar"));
-    setBagislar(q.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-  };
-
-  // RESMİ METNE ÇEVİRME FONKSİYONU (Base64)
-  const dosyaOku = (e, alanAdi) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 1024 * 1024) { alert("Lütfen 1MB'dan küçük bir resim seçiniz."); return; }
-    setYukleniyor(true);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-        setForm(prev => ({ ...prev, [alanAdi]: reader.result }));
-        setYukleniyor(false);
-    };
-    reader.readAsDataURL(file);
+  const bekleyenleriGetir = async () => {
+    const q = await getDocs(collection(db, "bekleyen_bagislar"));
+    setBekleyenler(q.docs.map(doc => ({ id: doc.id, ...doc.data() })));
   };
 
   const ayarlariGuncelle = async () => {
-    try {
-        await updateDoc(doc(db, "ayarlar", "genel"), {
-            ...form,
-            toplananSayi: Number(form.toplananSayi),
-            hedefSayi: Number(form.hedefSayi),
-            birimFiyat: Number(form.birimFiyat)
-        });
-        alert("✅ Ayarlar ve Resimler Kaydedildi!");
-    } catch (error) { console.error("Hata:", error); alert("Kaydederken hata oluştu."); }
+    await updateDoc(doc(db, "ayarlar", "genel"), form);
+    alert("✅ Ayarlar Kaydedildi!");
   };
 
-  const bagisEkle = async () => {
+  // --- ONAYLAMA SİSTEMİ ---
+  const bagisiOnayla = async (bekleyen) => {
+    if(!onayIsmi) return alert("Lütfen listede görünecek ismi yazın.");
+
+    // 1. Gerçek listeye ekle
     await addDoc(collection(db, "bagislar"), {
-      isim: bagisForm.isim, adet: Number(bagisForm.adet), tarih: new Date().toISOString()
+        isim: onayIsmi,
+        adet: Number(bekleyen.adet),
+        tarih: new Date().toISOString()
     });
-    const yeniToplanan = Number(form.toplananSayi) + Number(bagisForm.adet);
-    setForm(prev => ({ ...prev, toplananSayi: yeniToplanan }));
+
+    // 2. Toplanan sayıyı arttır
+    const yeniToplanan = Number(form.toplananSayi) + Number(bekleyen.adet);
     await updateDoc(doc(db, "ayarlar", "genel"), { toplananSayi: yeniToplanan });
-    setBagisForm({ isim: "", adet: 1 });
-    bagislariGetir();
+    setForm(prev => ({ ...prev, toplananSayi: yeniToplanan }));
+
+    // 3. Bekleyenlerden sil
+    await deleteDoc(doc(db, "bekleyen_bagislar", bekleyen.id));
+
+    // 4. WhatsApp Mesajı Aç
+    const mesaj = `Merhaba, ${bekleyen.adet} adet kumanya bağışınız tarafımıza ulaşmıştır. Allah kabul etsin. Destekleriniz için teşekkür ederiz.`;
+    window.open(`https://wa.me/${bekleyen.telefon}?text=${encodeURIComponent(mesaj)}`, '_blank');
+
+    setSeciliBekleyen(null);
+    setOnayIsmi("");
+    bekleyenleriGetir();
+    alert("✅ Bağış Onaylandı ve Listeye Eklendi!");
   };
 
-  const bagisSil = async (id, adet) => {
-      if(!confirm("Silinsin mi?")) return;
-      await deleteDoc(doc(db, "bagislar", id));
-      const yeniToplanan = Number(form.toplananSayi) - Number(adet);
-      setForm(prev => ({ ...prev, toplananSayi: yeniToplanan }));
-      await updateDoc(doc(db, "ayarlar", "genel"), { toplananSayi: yeniToplanan });
-      bagislariGetir();
+  const bagisiReddet = async (id, telefon) => {
+    if(!confirm("Bu bildirimi silmek ve 'Bağış gelmedi' mesajı atmak istiyor musun?")) return;
+    
+    await deleteDoc(doc(db, "bekleyen_bagislar", id));
+    
+    // Red Mesajı
+    const mesaj = `Merhaba, yaptığınız bağış bildirimini kontrol ettik ancak hesaplarımızda göremedik. Lütfen kontrol edip tekrar deneyiniz.`;
+    window.open(`https://wa.me/${telefon}?text=${encodeURIComponent(mesaj)}`, '_blank');
+    
+    bekleyenleriGetir();
   };
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans">
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
         
-        {/* AYARLAR */}
-        <div className="bg-white p-6 rounded-xl shadow border border-gray-200 space-y-5">
-          <h2 className="text-xl font-bold text-gray-800 border-b pb-2">Afiş Düzenle</h2>
-          
-          {/* Logo Yükle */}
-          <div className="bg-blue-50/50 p-4 rounded-lg border border-dashed border-blue-200">
-            <label className="block text-xs font-bold text-blue-800 mb-2">KURUM LOGOSU</label>
-            <div className="flex items-center gap-4">
-                {form.logoUrl ? (<img src={form.logoUrl} className="h-12 w-auto object-contain bg-white rounded border shadow-sm" />) : <div className="h-12 w-12 bg-gray-200 rounded flex items-center justify-center text-xs">Yok</div>}
-                <input type="file" accept="image/*" onChange={(e) => dosyaOku(e, 'logoUrl')} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200"/>
+        {/* SOL: AYARLAR & BANKA */}
+        <div className="space-y-6">
+            <div className="bg-white p-6 rounded-xl shadow space-y-4">
+                <h2 className="text-xl font-bold text-gray-800 border-b pb-2">Banka & İletişim Ayarları</h2>
+                <div><label className="text-xs font-bold">Banka Adı</label><input type="text" className="w-full p-2 border rounded" value={form.bankaAdi || ""} onChange={(e) => setForm({...form, bankaAdi: e.target.value})} /></div>
+                <div><label className="text-xs font-bold">IBAN (TR ile başla)</label><input type="text" className="w-full p-2 border rounded" value={form.iban || ""} onChange={(e) => setForm({...form, iban: e.target.value})} /></div>
+                <div><label className="text-xs font-bold">Alıcı Adı Soyadı</label><input type="text" className="w-full p-2 border rounded" value={form.aliciAdi || ""} onChange={(e) => setForm({...form, aliciAdi: e.target.value})} /></div>
+                <div><label className="text-xs font-bold">Bildirim Emailiniz</label><input type="email" className="w-full p-2 border rounded" value={form.adminEmail || ""} onChange={(e) => setForm({...form, adminEmail: e.target.value})} /></div>
+                <button onClick={ayarlariGuncelle} className="w-full bg-blue-600 text-white p-2 rounded font-bold hover:bg-blue-700">BANKA BİLGİLERİNİ KAYDET</button>
             </div>
-          </div>
 
-          {/* Ürün Resmi Yükle */}
-          <div className="bg-amber-50/50 p-4 rounded-lg border border-dashed border-amber-200">
-            <label className="block text-xs font-bold text-amber-800 mb-2">KUMANYA RESMİ</label>
-            <div className="flex items-center gap-4">
-                {form.urunResmi ? (<img src={form.urunResmi} className="h-16 w-auto object-contain bg-white rounded border shadow-sm" />) : <div className="h-16 w-16 bg-gray-200 rounded flex items-center justify-center text-xs">Yok</div>}
-                <input type="file" accept="image/*" onChange={(e) => dosyaOku(e, 'urunResmi')} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-amber-100 file:text-amber-700 hover:file:bg-amber-200"/>
+            <div className="bg-white p-6 rounded-xl shadow space-y-4">
+               <h2 className="text-xl font-bold text-gray-800 border-b pb-2">Genel Ayarlar</h2>
+               {/* Eski ayarların aynısı */}
+               <div className="grid grid-cols-2 gap-2">
+                 <div><label className="text-xs font-bold">Toplanan</label><input type="number" className="w-full p-2 border rounded" value={form.toplananSayi} onChange={(e) => setForm({...form, toplananSayi: e.target.value})} /></div>
+                 <div><label className="text-xs font-bold">Hedef</label><input type="number" className="w-full p-2 border rounded" value={form.hedefSayi} onChange={(e) => setForm({...form, hedefSayi: e.target.value})} /></div>
+               </div>
+               <div><label className="text-xs font-bold">Sloganlar</label><textarea rows="3" className="w-full p-2 border rounded" value={form.slogan} onChange={(e) => setForm({...form, slogan: e.target.value})}></textarea></div>
+               <button onClick={ayarlariGuncelle} className="w-full bg-amber-600 text-white p-3 rounded font-bold hover:bg-amber-700">TÜM AYARLARI KAYDET</button>
             </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-             <div><label className="text-xs font-bold text-gray-500">Toplanan</label><input type="number" className="w-full p-2 border rounded focus:ring-2 focus:ring-amber-500 outline-none" value={form.toplananSayi} onChange={(e) => setForm({...form, toplananSayi: e.target.value})} /></div>
-             <div><label className="text-xs font-bold text-gray-500">Hedef</label><input type="number" className="w-full p-2 border rounded focus:ring-2 focus:ring-amber-500 outline-none" value={form.hedefSayi} onChange={(e) => setForm({...form, hedefSayi: e.target.value})} /></div>
-             <div><label className="text-xs font-bold text-gray-500">Fiyat (TL)</label><input type="number" className="w-full p-2 border rounded focus:ring-2 focus:ring-amber-500 outline-none" value={form.birimFiyat} onChange={(e) => setForm({...form, birimFiyat: e.target.value})} /></div>
-          </div>
-          
-          {/* SLOGANLAR - ARTIK TEXTAREA */}
-          <div>
-            <label className="text-xs font-bold text-gray-500">Sloganlar (Alt alta yaz)</label>
-            <textarea rows="3" className="w-full p-2 border rounded focus:ring-2 focus:ring-amber-500 outline-none font-medium" value={form.slogan} onChange={(e) => setForm({...form, slogan: e.target.value})} placeholder="Bir Ailenin Sofrasına Ortak Ol&#10;Ramazan Paylaşmaktır"></textarea>
-          </div>
-
-          <div>
-            <label className="text-xs font-bold text-amber-700">İçerik Listesi</label>
-            <p className="text-[10px] text-gray-400 mb-1">Format: <span className="font-mono bg-gray-100 px-1">Ürün : Miktar</span></p>
-            <textarea rows="6" className="w-full p-2 border rounded font-mono text-sm focus:ring-2 focus:ring-amber-500 outline-none" value={form.icerikMetni || ""} onChange={(e) => setForm({...form, icerikMetni: e.target.value})}></textarea>
-          </div>
-
-          <button onClick={ayarlariGuncelle} disabled={yukleniyor} className="w-full bg-amber-600 text-white p-3 rounded-lg font-bold hover:bg-amber-700 disabled:opacity-50 transition shadow-lg">
-            {yukleniyor ? "Resim İşleniyor..." : "AYARLARI KAYDET"}
-          </button>
         </div>
 
-        {/* BAĞIŞÇILAR */}
-        <div className="bg-white p-6 rounded-xl shadow border border-gray-200 h-fit">
-          <h2 className="text-xl font-bold text-green-700 border-b pb-2 mb-4">Bağış Girişi</h2>
-          <div className="flex gap-2 mb-4">
-            <input type="text" placeholder="İsim Soyisim" className="flex-1 p-2 border rounded" value={bagisForm.isim} onChange={(e) => setBagisForm({...bagisForm, isim: e.target.value})} />
-            <input type="number" placeholder="Adet" className="w-20 p-2 border rounded" value={bagisForm.adet} onChange={(e) => setBagisForm({...bagisForm, adet: e.target.value})} />
-          </div>
-          <button onClick={bagisEkle} className="w-full bg-green-600 text-white p-2 rounded-lg font-bold hover:bg-green-700 mb-4 transition">+ LİSTEYE EKLE</button>
-          
-          <div className="max-h-[500px] overflow-y-auto space-y-2 border-t pt-2">
-            {bagislar.map((b) => (
-                <div key={b.id} className="flex justify-between items-center bg-gray-50 p-3 rounded border text-sm hover:bg-gray-100 transition">
-                    <span>{b.isim} <span className="font-bold text-green-600">({b.adet})</span></span>
-                    <button onClick={() => bagisSil(b.id, b.adet)} className="text-red-500 text-xs font-bold hover:underline px-2">SİL</button>
-                </div>
-            ))}
-          </div>
+        {/* SAĞ: ONAY BEKLEYENLER */}
+        <div className="bg-white p-6 rounded-xl shadow h-fit min-h-[500px]">
+            <h2 className="text-xl font-bold text-red-600 border-b pb-2 mb-4 flex justify-between">
+                Onay Bekleyenler 
+                <span className="bg-red-100 text-red-600 px-2 rounded-full text-sm">{bekleyenler.length}</span>
+            </h2>
+            
+            {bekleyenler.length === 0 && <p className="text-gray-400 italic">Şu an onay bekleyen yeni bağış yok.</p>}
+
+            <div className="space-y-4">
+                {bekleyenler.map((b) => (
+                    <div key={b.id} className="border border-red-100 rounded-lg p-4 bg-red-50/50">
+                        <div className="flex justify-between items-start mb-2">
+                            <div>
+                                <p className="font-bold text-gray-800">{b.adSoyad}</p>
+                                <p className="text-xs text-gray-500">{b.telefon}</p>
+                            </div>
+                            <div className="text-right">
+                                <span className="block text-xl font-black text-red-600">{b.adet} ADET</span>
+                                <span className="text-xs text-gray-400">{new Date(b.tarih).toLocaleDateString()}</span>
+                            </div>
+                        </div>
+
+                        {/* Onay Kutusu - Sadece seçilince açılır */}
+                        {seciliBekleyen === b.id ? (
+                            <div className="bg-white p-3 rounded border mt-2">
+                                <label className="text-xs font-bold text-gray-500">Listede Görünecek İsim:</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full p-2 border rounded mb-2 font-bold text-green-700" 
+                                    value={onayIsmi} 
+                                    onChange={(e) => setOnayIsmi(e.target.value)}
+                                />
+                                <div className="flex gap-2">
+                                    <button onClick={() => bagisiOnayla(b)} className="flex-1 bg-green-600 text-white py-2 rounded font-bold hover:bg-green-700">✅ ONAYLA & WHATSAPP</button>
+                                    <button onClick={() => setSeciliBekleyen(null)} className="px-3 bg-gray-200 rounded">İptal</button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex gap-2 mt-2">
+                                <button 
+                                    onClick={() => { setSeciliBekleyen(b.id); setOnayIsmi(b.adSoyad); }}
+                                    className="flex-1 bg-blue-600 text-white py-2 rounded font-bold text-sm hover:bg-blue-700"
+                                >
+                                    İNCELE & ONAYLA
+                                </button>
+                                <button 
+                                    onClick={() => bagisiReddet(b.id, b.telefon)}
+                                    className="px-4 bg-white border border-red-200 text-red-500 rounded font-bold text-sm hover:bg-red-50"
+                                >
+                                    REDDET
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
         </div>
+
       </div>
     </div>
   );
