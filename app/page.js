@@ -155,7 +155,7 @@ export default function Home() {
                 
                 {/* Fiyat Balonu */}
                 <div className="absolute top-0 right-2 bg-gradient-to-br from-red-600 to-red-800 text-white px-4 py-2 rounded-xl shadow-xl rotate-12 z-20 border-2 border-white/30 transform group-hover:rotate-6 transition">
-                    <span className="text-[10px] font-bold opacity-90 block text-center tracking-widest leading-tight">BİRİM<br/>BEDELİ</span>
+                    <span className="text-[10px] font-bold opacity-90 block text-center tracking-widest leading-tight">Kumanya<br/>fiyatı</span>
                     <span className="text-2xl font-black leading-none">{data.birimFiyat}<span className="text-sm align-top">₺</span></span>
                 </div>
                 
