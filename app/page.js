@@ -105,17 +105,19 @@ export default function Home() {
             {/* SOL TARAF (GÖRSELLER) */}
             <div className="w-full md:w-5/12 bg-gradient-to-b from-amber-100 via-amber-50 to-white p-6 md:p-8 flex flex-col relative border-b md:border-b-0 md:border-r border-amber-100/80">
               
-              {/* Logo ve Başlık */}
+              {/* Logo ve Başlık Grubu */}
               <div className="text-center mb-6 z-10 relative">
+                {/* Logo */}
                 {data.logoUrl && <img src={data.logoUrl} alt="Logo" className="w-auto h-32 md:h-40 mx-auto object-contain drop-shadow-md transform hover:scale-105 transition duration-500" />}
                 
-                {/* --- YENİ EKLENEN KURUM ADI --- */}
-                <h2 className="text-xs md:text-sm font-bold text-amber-700 tracking-widest mt-4 uppercase opacity-80 border-b-2 border-amber-200 inline-block pb-1">
+                {/* --- KURUM ADI (LOGOYA YAPIŞIK) --- */}
+                <h2 className="text-[10px] md:text-xs font-bold text-amber-700 tracking-[0.2em] mt-2 uppercase opacity-80">
                     ŞEKERPINAR EĞİTİM KURUMLARI
                 </h2>
                 {/* -------------------------------- */}
 
-                <h1 className="text-3xl font-serif font-black text-amber-900 leading-none mt-2 mb-2 drop-shadow-sm">RAMAZAN<br/>KUMANYASI</h1>
+                {/* Ana Başlık (Biraz aşağı itildi) */}
+                <h1 className="text-3xl font-serif font-black text-amber-900 leading-none mt-5 mb-2 drop-shadow-sm">RAMAZAN<br/>KUMANYASI</h1>
                 <div className="space-y-1">
                     {sloganListesi.map((slg, index) => (<p key={index} className="text-amber-800 text-sm font-medium italic relative inline-block px-4">{slg}</p>))}
                 </div>
@@ -153,12 +155,11 @@ export default function Home() {
               <div className="flex-shrink-0 flex items-center justify-center relative mt-4 mb-8 group z-10">
                 <div className="absolute inset-0 bg-amber-400 rounded-full blur-[60px] opacity-20 scale-75 group-hover:scale-90 transition duration-700"></div>
                 
-                {/* --- GÜNCELLENEN FİYAT BALONU --- */}
+                {/* Fiyat Balonu */}
                 <div className="absolute top-0 right-2 bg-gradient-to-br from-red-600 to-red-800 text-white px-4 py-2 rounded-xl shadow-xl rotate-12 z-20 border-2 border-white/30 transform group-hover:rotate-6 transition">
                     <span className="text-[10px] font-bold opacity-90 block text-center tracking-widest leading-tight">KUMANYA<br/>FİYATI</span>
                     <span className="text-2xl font-black leading-none">{data.birimFiyat}<span className="text-sm align-top">₺</span></span>
                 </div>
-                {/* --------------------------------- */}
                 
                 <img src={data.urunResmi || "https://cdn-icons-png.flaticon.com/512/679/679821.png"} className="w-64 md:w-72 object-contain relative z-10 drop-shadow-2xl hover:scale-105 transition duration-500" />
               </div>
