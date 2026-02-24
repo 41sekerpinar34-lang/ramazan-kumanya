@@ -24,7 +24,25 @@ export default function Home() {
   const ADRES = "Cumhuriyet, Namık Kemal Cd. No:25, 41444 Çayırova/Kocaeli";
   const TELEFON = "0505 916 80 33";
 
+  // --- BAŞLANGIÇ: VERİ ÇEKME VE LİNK KONTROLÜ ---
   useEffect(() => {
+    // 1. Ödeme Sonucu Kontrolü (Banka dönüşü için)
+    const urlParams = new URLSearchParams(window.location.search);
+    const durum = urlParams.get('durum');
+    
+    if (durum === 'basarili') {
+        setTimeout(() => {
+            alert("🎉 TEBRİKLER! Kredi kartı ödemeniz başarıyla gerçekleşti. Bağışınız onaylandıktan sonra destekçiler listesine eklenecektir. Allah kabul etsin.");
+            window.history.replaceState(null, '', '/'); // Linki temizle
+        }, 500);
+    } else if (durum === 'hata') {
+        setTimeout(() => {
+            alert("❌ MAALESEF! Ödeme işleminiz başarısız oldu veya iptal ettiniz. Lütfen bilgilerinizi kontrol edip tekrar deneyiniz.");
+            window.history.replaceState(null, '', '/'); // Linki temizle
+        }, 500);
+    }
+
+    // 2. Firebase Verilerini Dinleme
     const ayarDinle = onSnapshot(doc(db, "ayarlar", "genel"), (doc) => {
       setData(doc.data());
       setLoading(false);
@@ -38,7 +56,7 @@ export default function Home() {
     return () => { ayarDinle(); bagisDinle(); };
   }, []);
 
-  // HAVALE BİLDİRİMİ İÇİN
+  // --- HAVALE BİLDİRİMİ İÇİN ---
   const bildirimGonder = async (e) => {
     e.preventDefault();
     if(!form.adSoyad || !form.telefon || form.adet < 1) return alert("Lütfen tüm alanları doldurun.");
@@ -46,7 +64,9 @@ export default function Home() {
     setGonderiliyor(true);
     try {
         await addDoc(collection(db, "bekleyen_bagislar"), {
-            ...form,
+            adSoyad: form.adSoyad,
+            telefon: form.telefon,
+            adet: form.adet,
             tarih: new Date().toISOString()
         });
         alert("✅ Bağış bildiriminiz alındı! Kontrol edildikten sonra size dönüş yapılacaktır.");
@@ -59,13 +79,14 @@ export default function Home() {
     }
   };
 
-  // --- YENİ EKLENEN: KREDİ KARTI İLE OTOMATİK ÖDEME SİSTEMİ ---
+  // --- KREDİ KARTI İLE OTOMATİK ÖDEME SİSTEMİ ---
   const krediKartiIleOde = async (e) => {
     e.preventDefault();
     if(!form.adSoyad || !form.telefon || form.adet < 1) return alert("Lütfen tüm alanları doldurun.");
     
     setGonderiliyor(true);
     try {
+        // 1. API'ye İstek At
         const res = await fetch('/api/odeme', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -85,11 +106,21 @@ export default function Home() {
             return;
         }
 
-        // İŞTE ÇÖZÜM BURADA: Banka "URL" kelimesini BÜYÜK HARFLE gönderiyormuş!
+        // 2. Linki Bul
         const odemeLinki = result.URL || result.url || result.linkUrl || result.link;
         
         if (odemeLinki) {
-            window.location.href = odemeLinki; // Müşteriyi anında 3D güvenli sayfaya yönlendir!
+            // 3. KULLANICIYI BANKAYA YÖNLENDİRMEDEN ÖNCE VERİTABANINA KAYDET!
+            // İsminin yanına (Kredi Kartı) yazıyoruz ki Admin panelinde anlaşılsın.
+            await addDoc(collection(db, "bekleyen_bagislar"), {
+                adSoyad: form.adSoyad + " (Kredi Kartı)", 
+                telefon: form.telefon,
+                adet: Number(form.adet),
+                tarih: new Date().toISOString()
+            });
+
+            // 4. Bankaya Yönlendir
+            window.location.href = odemeLinki; 
         } else {
             alert("Ödeme linki alınamadı: \n" + JSON.stringify(result, null, 2));
             setGonderiliyor(false);
@@ -99,10 +130,6 @@ export default function Home() {
         setGonderiliyor(false);
     }
   };
-  
-  // -------------------------------------------------------------
-  // -------------------------------------------------------------
-  // -------------------------------------------------------------
 
   const yasalMetinAc = (tip) => {
     let baslik = "", icerik = "";
