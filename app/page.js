@@ -59,14 +59,13 @@ export default function Home() {
     }
   };
 
-  // --- YENİ EKLENEN: KREDİ KARTI İLE OTOMATİK ÖDEME SİSTEMİ ---
+  // --- YENİ EKLENEN: KREDİ KARTI İLE OTOMATİK ÖDEME SİSTEMİ (HATA GÖSTERİCİ) ---
   const krediKartiIleOde = async (e) => {
     e.preventDefault();
     if(!form.adSoyad || !form.telefon || form.adet < 1) return alert("Lütfen tüm alanları doldurun.");
     
     setGonderiliyor(true);
     try {
-        // Arka planda yazdığımız API dosyasına istek atıyoruz
         const res = await fetch('/api/odeme', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -80,14 +79,21 @@ export default function Home() {
         
         const result = await res.json();
         
-        // Paynkolay'dan dönen linki bul ve yönlendir
-        const odemeLinki = result.linkUrl || result.url || result.link || result.Url;
+        // Eğer bizim sistemimizde (şifrelerin eksik olması vb.) bir hata varsa:
+        if (result.error) {
+            alert("SİSTEM HATASI: " + result.error);
+            setGonderiliyor(false);
+            return;
+        }
+
+        // Bankadan dönen linki bul (Banka farklı isimlerde gönderebilir)
+        const odemeLinki = result.linkUrl || result.url || result.link || result.Url || (result.data && result.data.link) || result.paymentUrl;
         
         if (odemeLinki) {
             window.location.href = odemeLinki; // Müşteriyi 3D güvenli sayfaya gönder
         } else {
-            alert("Ödeme linki oluşturulamadı. Lütfen ayarları kontrol edin.");
-            console.log("Banka Yanıtı:", result);
+            // İŞTE BURASI ÖNEMLİ: BANKANIN VERDİĞİ GERÇEK HATAYI EKRANA YAZDIRALIM
+            alert("BANKA HATASI: \n" + JSON.stringify(result, null, 2));
             setGonderiliyor(false);
         }
     } catch(err) {
@@ -95,6 +101,7 @@ export default function Home() {
         setGonderiliyor(false);
     }
   };
+  // -------------------------------------------------------------
   // -------------------------------------------------------------
 
   const yasalMetinAc = (tip) => {
