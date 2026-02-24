@@ -69,6 +69,14 @@ export default function Home() {
             adet: form.adet,
             tarih: new Date().toISOString()
         });
+
+        // E-POSTA BİLDİRİMİNİ TETİKLE
+        await fetch('/api/bildirim', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adSoyad: form.adSoyad, telefon: form.telefon, adet: form.adet, yontem: "Havale/EFT" })
+        });
+
         alert("✅ Bağış bildiriminiz alındı! Kontrol edildikten sonra size dönüş yapılacaktır.");
         setModalAcik(false);
         setForm({ adSoyad: "", telefon: "", adet: 1 });
@@ -86,7 +94,6 @@ export default function Home() {
     
     setGonderiliyor(true);
     try {
-        // 1. API'ye İstek At
         const res = await fetch('/api/odeme', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -106,12 +113,9 @@ export default function Home() {
             return;
         }
 
-        // 2. Linki Bul
         const odemeLinki = result.URL || result.url || result.linkUrl || result.link;
         
         if (odemeLinki) {
-            // 3. KULLANICIYI BANKAYA YÖNLENDİRMEDEN ÖNCE VERİTABANINA KAYDET!
-            // İsminin yanına (Kredi Kartı) yazıyoruz ki Admin panelinde anlaşılsın.
             await addDoc(collection(db, "bekleyen_bagislar"), {
                 adSoyad: form.adSoyad + " (Kredi Kartı)", 
                 telefon: form.telefon,
@@ -119,7 +123,13 @@ export default function Home() {
                 tarih: new Date().toISOString()
             });
 
-            // 4. Bankaya Yönlendir
+            // E-POSTA BİLDİRİMİNİ TETİKLE
+            await fetch('/api/bildirim', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ adSoyad: form.adSoyad + " (Kredi Kartı)", telefon: form.telefon, adet: form.adet, yontem: "Kredi Kartı" })
+            });
+
             window.location.href = odemeLinki; 
         } else {
             alert("Ödeme linki alınamadı: \n" + JSON.stringify(result, null, 2));
