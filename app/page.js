@@ -59,7 +59,7 @@ export default function Home() {
     }
   };
 
-  // --- YENİ EKLENEN: KREDİ KARTI İLE OTOMATİK ÖDEME SİSTEMİ (HATA GÖSTERİCİ) ---
+  // --- YENİ EKLENEN: KREDİ KARTI İLE OTOMATİK ÖDEME SİSTEMİ ---
   const krediKartiIleOde = async (e) => {
     e.preventDefault();
     if(!form.adSoyad || !form.telefon || form.adet < 1) return alert("Lütfen tüm alanları doldurun.");
@@ -79,21 +79,19 @@ export default function Home() {
         
         const result = await res.json();
         
-        // Eğer bizim sistemimizde (şifrelerin eksik olması vb.) bir hata varsa:
         if (result.error) {
             alert("SİSTEM HATASI: " + result.error);
             setGonderiliyor(false);
             return;
         }
 
-        // Bankadan dönen linki bul (Banka farklı isimlerde gönderebilir)
-        const odemeLinki = result.linkUrl || result.url || result.link || result.Url || (result.data && result.data.link) || result.paymentUrl;
+        // İŞTE ÇÖZÜM BURADA: Banka "URL" kelimesini BÜYÜK HARFLE gönderiyormuş!
+        const odemeLinki = result.URL || result.url || result.linkUrl || result.link;
         
         if (odemeLinki) {
-            window.location.href = odemeLinki; // Müşteriyi 3D güvenli sayfaya gönder
+            window.location.href = odemeLinki; // Müşteriyi anında 3D güvenli sayfaya yönlendir!
         } else {
-            // İŞTE BURASI ÖNEMLİ: BANKANIN VERDİĞİ GERÇEK HATAYI EKRANA YAZDIRALIM
-            alert("BANKA HATASI: \n" + JSON.stringify(result, null, 2));
+            alert("Ödeme linki alınamadı: \n" + JSON.stringify(result, null, 2));
             setGonderiliyor(false);
         }
     } catch(err) {
@@ -101,6 +99,8 @@ export default function Home() {
         setGonderiliyor(false);
     }
   };
+  
+  // -------------------------------------------------------------
   // -------------------------------------------------------------
   // -------------------------------------------------------------
 
