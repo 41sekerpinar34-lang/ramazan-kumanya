@@ -24,135 +24,86 @@ export default function Home() {
   const ADRES = "Cumhuriyet, Namık Kemal Cd. No:25, 41444 Çayırova/Kocaeli";
   const TELEFON = "0505 916 80 33";
 
-  // --- BAŞLANGIÇ: VERİ ÇEKME VE LİNK KONTROLÜ ---
   useEffect(() => {
-    // 1. Ödeme Sonucu Kontrolü (Banka dönüşü için)
     const urlParams = new URLSearchParams(window.location.search);
     const durum = urlParams.get('durum');
     
     if (durum === 'basarili') {
         setTimeout(() => {
             alert("🎉 TEBRİKLER! Kredi kartı ödemeniz başarıyla gerçekleşti. Bağışınız onaylandıktan sonra destekçiler listesine eklenecektir. Allah kabul etsin.");
-            window.history.replaceState(null, '', '/'); // Linki temizle
+            window.history.replaceState(null, '', '/'); 
         }, 500);
     } else if (durum === 'hata') {
         setTimeout(() => {
             alert("❌ MAALESEF! Ödeme işleminiz başarısız oldu veya iptal ettiniz. Lütfen bilgilerinizi kontrol edip tekrar deneyiniz.");
-            window.history.replaceState(null, '', '/'); // Linki temizle
+            window.history.replaceState(null, '', '/'); 
         }, 500);
     }
 
-    // 2. Firebase Verilerini Dinleme
-    const ayarDinle = onSnapshot(doc(db, "ayarlar", "genel"), (doc) => {
-      setData(doc.data());
-      setLoading(false);
-    });
+    const ayarDinle = onSnapshot(doc(db, "ayarlar", "genel"), (doc) => { setData(doc.data()); setLoading(false); });
     const bagisDinle = onSnapshot(collection(db, "bagislar"), (snap) => {
         const liste = snap.docs.map(d => d.data());
         liste.sort((a, b) => new Date(b.tarih) - new Date(a.tarih));
-        setBagislar(liste.slice(0, 5)); 
-        setToplamBagisciSayisi(liste.length);
+        setBagislar(liste.slice(0, 5)); setToplamBagisciSayisi(liste.length);
     });
     return () => { ayarDinle(); bagisDinle(); };
   }, []);
 
-  // --- HAVALE BİLDİRİMİ İÇİN ---
   const bildirimGonder = async (e) => {
     e.preventDefault();
     if(!form.adSoyad || !form.telefon || form.adet < 1) return alert("Lütfen tüm alanları doldurun.");
-    
     setGonderiliyor(true);
     try {
-        await addDoc(collection(db, "bekleyen_bagislar"), {
-            adSoyad: form.adSoyad,
-            telefon: form.telefon,
-            adet: form.adet,
-            tarih: new Date().toISOString()
-        });
-
-        // E-POSTA BİLDİRİMİNİ TETİKLE
-        await fetch('/api/bildirim', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ adSoyad: form.adSoyad, telefon: form.telefon, adet: form.adet, yontem: "Havale/EFT" })
-        });
-
+        await addDoc(collection(db, "bekleyen_bagislar"), { adSoyad: form.adSoyad, telefon: form.telefon, adet: form.adet, tarih: new Date().toISOString() });
+        await fetch('/api/bildirim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adSoyad: form.adSoyad, telefon: form.telefon, adet: form.adet, yontem: "Havale/EFT" }) });
         alert("✅ Bağış bildiriminiz alındı! Kontrol edildikten sonra size dönüş yapılacaktır.");
-        setModalAcik(false);
-        setForm({ adSoyad: "", telefon: "", adet: 1 });
-    } catch (error) {
-        alert("Bir hata oluştu.");
-    } finally {
-        setGonderiliyor(false);
-    }
+        setModalAcik(false); setForm({ adSoyad: "", telefon: "", adet: 1 });
+    } catch (error) { alert("Bir hata oluştu."); } finally { setGonderiliyor(false); }
   };
 
-  // --- KREDİ KARTI İLE OTOMATİK ÖDEME SİSTEMİ ---
   const krediKartiIleOde = async (e) => {
     e.preventDefault();
     if(!form.adSoyad || !form.telefon || form.adet < 1) return alert("Lütfen tüm alanları doldurun.");
-    
     setGonderiliyor(true);
     try {
-        const res = await fetch('/api/odeme', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                adSoyad: form.adSoyad,
-                telefon: form.telefon,
-                adet: form.adet,
-                birimFiyat: data.birimFiyat
-            })
-        });
-        
+        const res = await fetch('/api/odeme', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adSoyad: form.adSoyad, telefon: form.telefon, adet: form.adet, birimFiyat: data.birimFiyat }) });
         const result = await res.json();
         
-        if (result.error) {
-            alert("SİSTEM HATASI: " + result.error);
-            setGonderiliyor(false);
-            return;
-        }
-
+        if (result.error) { alert("SİSTEM HATASI: " + result.error); setGonderiliyor(false); return; }
         const odemeLinki = result.URL || result.url || result.linkUrl || result.link;
         
         if (odemeLinki) {
-            await addDoc(collection(db, "bekleyen_bagislar"), {
-                adSoyad: form.adSoyad + " (Kredi Kartı)", 
-                telefon: form.telefon,
-                adet: Number(form.adet),
-                tarih: new Date().toISOString()
-            });
-
-            // E-POSTA BİLDİRİMİNİ TETİKLE
-            await fetch('/api/bildirim', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ adSoyad: form.adSoyad + " (Kredi Kartı)", telefon: form.telefon, adet: form.adet, yontem: "Kredi Kartı" })
-            });
-
+            await addDoc(collection(db, "bekleyen_bagislar"), { adSoyad: form.adSoyad + " (Kredi Kartı)", telefon: form.telefon, adet: Number(form.adet), tarih: new Date().toISOString() });
+            await fetch('/api/bildirim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adSoyad: form.adSoyad + " (Kredi Kartı)", telefon: form.telefon, adet: form.adet, yontem: "Kredi Kartı" }) });
             window.location.href = odemeLinki; 
-        } else {
-            alert("Ödeme linki alınamadı: \n" + JSON.stringify(result, null, 2));
-            setGonderiliyor(false);
+        } else { alert("Ödeme linki alınamadı: \n" + JSON.stringify(result, null, 2)); setGonderiliyor(false); }
+    } catch(err) { alert("Bağlantı hatası oluştu."); setGonderiliyor(false); }
+  };
+
+  // --- AKILLI PAYLAŞIM FONKSİYONU ---
+  const paylasimYap = async () => {
+    // Sayfanın nerede açıldığını kontrol et (Iframe içinde mi?)
+    const url = window.self !== window.top 
+        ? "https://www.sekerpinarcayirovaegitimkurumlari.com.tr/kumanyaafis.html" 
+        : window.location.href;
+
+    if (navigator.share) {
+        try {
+            await navigator.share({ title: 'Ramazan Kumanyası', url: url });
+        } catch (error) {
+            console.log("Paylaşım iptal edildi veya desteklenmiyor.");
         }
-    } catch(err) {
-        alert("Bağlantı hatası oluştu. Lütfen tekrar deneyin.");
-        setGonderiliyor(false);
+    } else {
+        navigator.clipboard.writeText(url);
+        alert("Link kopyalandı!");
     }
   };
 
   const yasalMetinAc = (tip) => {
     let baslik = "", icerik = "";
-    if(tip === 1) {
-        baslik = "Mesafeli Satış Sözleşmesi";
-        icerik = `1. TARAFLAR\nSatıcı (Bağış Alan): ${KURUM_ADI}\nAdres: ${ADRES}\nTelefon: ${TELEFON}\n\n2. KONU\nİşbu sözleşmenin konusu, Web sitesi üzerinden yapılan Ramazan Kumanyası bağış işlemidir.\n\n3. CAYMA HAKKI\nBağış işlemi, ifa edildikten sonra geri alınamayan hizmetler kapsamında olduğundan cayma hakkı bulunmamaktadır. Ancak sehven yapılan hatalı ödemeler için kurum ile iletişime geçiniz.`;
-    } else if (tip === 2) {
-        baslik = "Gizlilik ve Güvenlik Politikası";
-        icerik = `Verileriniz (Ad, Soyad, Telefon) sadece bağış sürecini yönetmek için kullanılır. Kredi kartı bilgileriniz sistemlerimizde asla saklanmaz, banka altyapısı üzerinden güvenle işlenir.`;
-    } else if (tip === 3) {
-        baslik = "İptal ve İade Koşulları";
-        icerik = `Bağış niteliğindeki ödemelerin iadesi kural olarak mümkün değildir. Sistemsel hata sonucu fazla çekim yapılması durumunda iade talebi oluşturabilirsiniz.`;
-    }
+    if(tip === 1) { baslik = "Mesafeli Satış Sözleşmesi"; icerik = `1. TARAFLAR\nSatıcı: ${KURUM_ADI}\nAdres: ${ADRES}\nTelefon: ${TELEFON}\n\n2. KONU\nİşbu sözleşmenin konusu, Web sitesi üzerinden yapılan Ramazan Kumanyası bağış işlemidir.\n\n3. CAYMA HAKKI\nBağış işlemi ifa edildikten sonra kural olarak cayma hakkı bulunmamaktadır. Ancak sehven yapılan mükerrer ödemeler iade edilebilir.`; } 
+    else if (tip === 2) { baslik = "Gizlilik ve Güvenlik Politikası"; icerik = `Verileriniz bağış sürecini yönetmek için kullanılır. Kart bilgileriniz sistemlerimizde asla saklanmaz, banka üzerinden güvenle işlenir.`; } 
+    else if (tip === 3) { baslik = "İptal ve İade Koşulları"; icerik = `Bağış niteliğindeki ödemelerin iadesi kural olarak mümkün değildir. Hata sonucu fazla çekim yapılması durumunda iletişime geçiniz.`; }
     setSeciliYasalBaslik(baslik); setSeciliYasalIcerik(icerik); setYasalModalAcik(true);
   };
 
@@ -168,21 +119,14 @@ export default function Home() {
     <div className="min-h-screen bg-[#ebe7e0] font-sans text-gray-800 flex flex-col">
       <div className="flex-grow flex items-center justify-center p-0 md:p-4 my-8">
           <div className="w-full max-w-[1000px] bg-white shadow-2xl md:rounded-3xl overflow-hidden flex flex-col md:flex-row min-h-screen md:min-h-[650px] border border-white/50">
-            
-            {/* SOL TARAF */}
             <div className="w-full md:w-5/12 bg-gradient-to-b from-amber-100 via-amber-50 to-white p-6 md:p-8 flex flex-col relative border-b md:border-b-0 md:border-r border-amber-100/80">
               <div className="text-center mb-6 z-10 relative">
                 {data.logoUrl && <img src={data.logoUrl} alt="Logo" className="w-auto h-32 md:h-40 mx-auto object-contain drop-shadow-md transform hover:scale-105 transition duration-500" />}
-                <h2 className="text-[10px] md:text-xs font-bold text-amber-700 tracking-[0.2em] mt-2 uppercase opacity-80">
-                    ŞEKERPINAR EĞİTİM KURUMLARI
-                </h2>
+                <h2 className="text-[10px] md:text-xs font-bold text-amber-700 tracking-[0.2em] mt-2 uppercase opacity-80">ŞEKERPINAR EĞİTİM KURUMLARI</h2>
                 <h1 className="text-3xl font-serif font-black text-amber-900 leading-none mt-5 mb-2 drop-shadow-sm">RAMAZAN<br/>KUMANYASI</h1>
-                <div className="space-y-1">
-                    {sloganListesi.map((slg, index) => (<p key={index} className="text-amber-800 text-sm font-medium italic relative inline-block px-4">{slg}</p>))}
-                </div>
+                <div className="space-y-1">{sloganListesi.map((slg, index) => (<p key={index} className="text-amber-800 text-sm font-medium italic relative inline-block px-4">{slg}</p>))}</div>
               </div>
 
-              {/* PUZZLE ALANI */}
               {data.puzzleResmi && (
                 <div className="mb-8 relative z-10 text-center animate-in fade-in zoom-in duration-500">
                   <div className="relative rounded-xl overflow-hidden shadow-lg border-4 border-white bg-gray-200 group">
@@ -197,31 +141,20 @@ export default function Home() {
                 </div>
               )}
 
-              {/* KUMANYA FİYATI */}
               <div className="flex-shrink-0 flex items-center justify-center relative mt-4 mb-8 group z-10">
                 <div className="absolute inset-0 bg-amber-400 rounded-full blur-[60px] opacity-20 scale-75 group-hover:scale-90 transition duration-700"></div>
-                <div className="absolute top-0 right-2 bg-gradient-to-br from-red-600 to-red-800 text-white px-4 py-2 rounded-xl shadow-xl rotate-12 z-20 border-2 border-white/30 transform group-hover:rotate-6 transition">
-                    <span className="text-[10px] font-bold opacity-90 block text-center tracking-widest leading-tight">KUMANYA<br/>FİYATI</span>
-                    <span className="text-2xl font-black leading-none">{data.birimFiyat}<span className="text-sm align-top">₺</span></span>
-                </div>
+                <div className="absolute top-0 right-2 bg-gradient-to-br from-red-600 to-red-800 text-white px-4 py-2 rounded-xl shadow-xl rotate-12 z-20 border-2 border-white/30 transform group-hover:rotate-6 transition"><span className="text-[10px] font-bold opacity-90 block text-center tracking-widest leading-tight">KUMANYA<br/>FİYATI</span><span className="text-2xl font-black leading-none">{data.birimFiyat}<span className="text-sm align-top">₺</span></span></div>
                 <img src={data.urunResmi || "https://cdn-icons-png.flaticon.com/512/679/679821.png"} className="w-64 md:w-72 object-contain relative z-10 drop-shadow-2xl hover:scale-105 transition duration-500" />
               </div>
             </div>
 
-            {/* SAĞ TARAF */}
             <div className="w-full md:w-7/12 p-6 md:p-8 bg-white flex flex-col relative">
-              
               <div className="mb-6 relative z-10">
                 <h3 className="flex items-center gap-2 font-bold text-amber-900 pb-3 mb-4 uppercase text-sm tracking-wider border-b border-gray-100"><ShoppingBag size={18} className="text-amber-500" /> Paket İçeriği</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto">
                     {icerikListesi.map((item, index) => {
                         const parts = item.split(':');
-                        return (
-                            <div key={index} className="flex justify-between items-center p-2.5 bg-gray-50 rounded-lg border border-gray-100 hover:border-amber-200 transition-colors group shadow-sm">
-                                <span className="text-gray-700 font-semibold text-sm flex items-center gap-2"><PackageCheck size={16} className="text-amber-400/70 group-hover:text-amber-500 transition-colors" />{parts[0]}</span>
-                                {parts[1] && <span className="font-bold text-gray-900 bg-white px-2.5 py-1 rounded-md text-xs border border-gray-200 shadow-sm whitespace-nowrap">{parts[1]}</span>}
-                            </div>
-                        )
+                        return (<div key={index} className="flex justify-between items-center p-2.5 bg-gray-50 rounded-lg border border-gray-100 hover:border-amber-200 transition-colors group shadow-sm"><span className="text-gray-700 font-semibold text-sm flex items-center gap-2"><PackageCheck size={16} className="text-amber-400/70 group-hover:text-amber-500 transition-colors" />{parts[0]}</span>{parts[1] && <span className="font-bold text-gray-900 bg-white px-2.5 py-1 rounded-md text-xs border border-gray-200 shadow-sm whitespace-nowrap">{parts[1]}</span>}</div>)
                     })}
                 </div>
               </div>
@@ -234,30 +167,18 @@ export default function Home() {
                   <div className="flex justify-between text-xs text-gray-400 mt-1 font-mono"><span>{data.toplananSayi} Toplanan</span><span>{data.hedefSayi} Hedef</span></div>
                 </div>
                 <div className="space-y-2.5 mb-auto overflow-y-auto max-h-[200px] pr-1">
-                    {bagislar.map((b, i) => (
-                        <div key={i} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all">
-                            <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-black text-xs border border-white shadow-sm">{b.isim.charAt(0).toUpperCase()}</div><span className="text-sm font-bold text-gray-700 line-clamp-1">{b.isim}</span></div>
-                            <span className="text-xs font-extrabold bg-green-50 text-green-700 px-2 py-1 rounded-md border border-green-100">{b.adet} Paket</span>
-                        </div>
-                    ))}
+                    {bagislar.map((b, i) => (<div key={i} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-black text-xs border border-white shadow-sm">{b.isim.charAt(0).toUpperCase()}</div><span className="text-sm font-bold text-gray-700 line-clamp-1">{b.isim}</span></div><span className="text-xs font-extrabold bg-green-50 text-green-700 px-2 py-1 rounded-md border border-green-100">{b.adet} Paket</span></div>))}
                     {bagislar.length === 0 && <p className="text-center text-gray-400 text-sm italic py-4">Henüz listelenen bağış yok.</p>}
                 </div>
                 {kalanBagisci > 0 && (<p className="text-center text-xs font-medium text-gray-500 mt-3 pt-2 border-t border-gray-200">...ve <span className="font-bold text-amber-700">{kalanBagisci} hayırsever</span> daha.</p>)}
               </div>
 
-              <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-xl flex gap-3 items-start relative z-10 shadow-sm">
-                <Info size={20} className="text-blue-500 shrink-0 mt-0.5" />
-                <p className="text-xs text-blue-800 font-medium leading-relaxed"><span className="font-bold">Bilgilendirme:</span> Satın aldığınız kumanyalar, talebinize göre ekiplerimiz tarafından ihtiyaç sahiplerine ulaştırılabilir ya da tarafınızdan teslim alınarak bizzat sizlerce dağıtılabilir.</p>
-              </div>
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-xl flex gap-3 items-start relative z-10 shadow-sm"><Info size={20} className="text-blue-500 shrink-0 mt-0.5" /><p className="text-xs text-blue-800 font-medium leading-relaxed"><span className="font-bold">Bilgilendirme:</span> Satın aldığınız kumanyalar, talebinize göre ekiplerimiz tarafından ihtiyaç sahiplerine ulaştırılabilir ya da tarafınızdan teslim alınarak bizzat sizlerce dağıtılabilir.</p></div>
 
               <div className="grid grid-cols-2 gap-4 mt-auto relative z-10">
-                <button onClick={() => setModalAcik(true)} className="bg-gradient-to-tr from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white py-4 rounded-2xl font-black shadow-lg shadow-green-200/50 flex items-center justify-center gap-2 transition transform active:scale-[0.98] group overflow-hidden relative">
-                  <div className="absolute inset-0 bg-white/20 skew-x-12 -translate-x-full group-hover:translate-x-full transition duration-700"></div>
-                  <CreditCard size={20} /> BAĞIŞ YAP
-                </button>
-                <button onClick={() => navigator.share ? navigator.share({title:'Ramazan Kumanyası', url:window.location.href}) : alert("Link kopyalandı!")} className="bg-white border-2 border-gray-200 hover:border-amber-400 text-gray-700 hover:text-amber-700 py-4 rounded-2xl font-black flex items-center justify-center gap-2 transition transform active:scale-[0.98] shadow-sm hover:shadow-md">
-                  <Share2 size={20} /> PAYLAŞ
-                </button>
+                <button onClick={() => setModalAcik(true)} className="bg-gradient-to-tr from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white py-4 rounded-2xl font-black shadow-lg shadow-green-200/50 flex items-center justify-center gap-2 transition transform active:scale-[0.98] group overflow-hidden relative"><div className="absolute inset-0 bg-white/20 skew-x-12 -translate-x-full group-hover:translate-x-full transition duration-700"></div><CreditCard size={20} /> BAĞIŞ YAP</button>
+                {/* YENİ PAYLAŞ BUTONU */}
+                <button onClick={paylasimYap} className="bg-white border-2 border-gray-200 hover:border-amber-400 text-gray-700 hover:text-amber-700 py-4 rounded-2xl font-black flex items-center justify-center gap-2 transition transform active:scale-[0.98] shadow-sm hover:shadow-md"><Share2 size={20} /> PAYLAŞ</button>
               </div>
             </div>
           </div>
@@ -265,12 +186,7 @@ export default function Home() {
 
       <footer className="bg-gray-900 text-gray-400 py-10 px-4 mt-auto">
         <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-4">
-                <h4 className="text-white font-bold text-lg mb-4">İletişim</h4>
-                <div className="flex items-start gap-3"><MapPin className="text-amber-500 mt-1 shrink-0" size={20} /><p className="text-sm">{ADRES}</p></div>
-                <div className="flex items-center gap-3"><Phone className="text-amber-500 shrink-0" size={20} /><p className="text-sm">{TELEFON}</p></div>
-                <div className="pt-4"><p className="text-xs text-gray-500">{KURUM_ADI}</p></div>
-            </div>
+            <div className="space-y-4"><h4 className="text-white font-bold text-lg mb-4">İletişim</h4><div className="flex items-start gap-3"><MapPin className="text-amber-500 mt-1 shrink-0" size={20} /><p className="text-sm">{ADRES}</p></div><div className="flex items-center gap-3"><Phone className="text-amber-500 shrink-0" size={20} /><p className="text-sm">{TELEFON}</p></div><div className="pt-4"><p className="text-xs text-gray-500">{KURUM_ADI}</p></div></div>
             <div className="space-y-3 md:text-right">
                 <h4 className="text-white font-bold text-lg mb-4">Kurumsal</h4>
                 <button onClick={() => yasalMetinAc(1)} className="flex items-center gap-2 text-sm hover:text-white transition w-full md:justify-end group"><FileText size={16} className="group-hover:text-amber-500" />Mesafeli Satış Sözleşmesi</button>
@@ -281,41 +197,23 @@ export default function Home() {
         <div className="text-center text-xs text-gray-600 mt-10 border-t border-gray-800 pt-6">© 2026 Tüm Hakları Saklıdır.</div>
       </footer>
 
-      {/* === BAĞIŞ MODALI (KART VE IBAN) === */}
       {modalAcik && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white w-full md:max-w-lg rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300">
-                <div className="bg-amber-50 p-4 border-b border-amber-100 flex justify-between items-center">
-                    <h3 className="font-bold text-amber-900 text-lg">Bağış Yöntemi Seçin</h3>
-                    <button onClick={() => setModalAcik(false)} className="p-2 bg-white rounded-full hover:bg-red-50 text-gray-500 hover:text-red-500 transition"><X size={20}/></button>
-                </div>
+                <div className="bg-amber-50 p-4 border-b border-amber-100 flex justify-between items-center"><h3 className="font-bold text-amber-900 text-lg">Bağış Yöntemi Seçin</h3><button onClick={() => setModalAcik(false)} className="p-2 bg-white rounded-full hover:bg-red-50 text-gray-500 hover:text-red-500 transition"><X size={20}/></button></div>
                 <div className="p-6">
-                    <div className="grid grid-cols-2 gap-3 mb-6">
-                        <button onClick={() => setOdemeYontemi('iban')} className={`p-4 rounded-xl border-2 font-bold flex flex-col items-center gap-2 transition ${odemeYontemi === 'iban' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-gray-100 hover:border-gray-300 text-gray-500'}`}><span className="text-2xl">🏦</span> HAVALE / EFT</button>
-                        <button onClick={() => setOdemeYontemi('kredi_karti')} className={`p-4 rounded-xl border-2 font-bold flex flex-col items-center gap-2 transition ${odemeYontemi === 'kredi_karti' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-gray-100 hover:border-gray-300 text-gray-500'}`}><span className="text-2xl">💳</span> KREDİ KARTI</button>
-                    </div>
-
-                    {/* KREDİ KARTI ALANI */}
+                    <div className="grid grid-cols-2 gap-3 mb-6"><button onClick={() => setOdemeYontemi('iban')} className={`p-4 rounded-xl border-2 font-bold flex flex-col items-center gap-2 transition ${odemeYontemi === 'iban' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-gray-100 hover:border-gray-300 text-gray-500'}`}><span className="text-2xl">🏦</span> HAVALE / EFT</button><button onClick={() => setOdemeYontemi('kredi_karti')} className={`p-4 rounded-xl border-2 font-bold flex flex-col items-center gap-2 transition ${odemeYontemi === 'kredi_karti' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-gray-100 hover:border-gray-300 text-gray-500'}`}><span className="text-2xl">💳</span> KREDİ KARTI</button></div>
                     {odemeYontemi === 'kredi_karti' && (
                         <div className="space-y-5 animate-in fade-in">
-                            <div className="bg-red-50 border border-red-100 p-3 rounded-xl text-red-700 text-sm text-center">
-                                <p><strong>Bilgi:</strong> 3D Secure güvenli ödeme sayfasına yönlendirileceksiniz.</p>
-                            </div>
+                            <div className="bg-red-50 border border-red-100 p-3 rounded-xl text-red-700 text-sm text-center"><p><strong>Bilgi:</strong> 3D Secure güvenli ödeme sayfasına yönlendirileceksiniz.</p></div>
                             <form onSubmit={krediKartiIleOde} className="space-y-3">
                                 <p className="text-sm font-bold text-gray-700">Bilgilerinizi Girerek Devam Edin 👇</p>
-                                <div className="flex gap-2">
-                                    <input required type="text" placeholder="Ad Soyad" className="flex-1 p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-amber-500" value={form.adSoyad} onChange={(e) => setForm({...form, adSoyad: e.target.value})} />
-                                    <input required type="number" min="1" placeholder="Adet" className="w-20 p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-amber-500 text-center font-bold" value={form.adet} onChange={(e) => setForm({...form, adet: e.target.value})} />
-                                </div>
+                                <div className="flex gap-2"><input required type="text" placeholder="Ad Soyad" className="flex-1 p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-amber-500" value={form.adSoyad} onChange={(e) => setForm({...form, adSoyad: e.target.value})} /><input required type="number" min="1" placeholder="Adet" className="w-20 p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-amber-500 text-center font-bold" value={form.adet} onChange={(e) => setForm({...form, adet: e.target.value})} /></div>
                                 <input required type="tel" placeholder="Telefon (05...)" className="w-full p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-amber-500" value={form.telefon} onChange={(e) => setForm({...form, telefon: e.target.value})} />
-                                <button disabled={gonderiliyor} className="w-full bg-black text-white py-4 rounded-xl font-bold hover:bg-gray-800 transition shadow-lg disabled:opacity-50">
-                                    {gonderiliyor ? "GÜVENLİ SAYFAYA BAĞLANILIYOR..." : "ÖDEME EKRANINA GİT"}
-                                </button>
+                                <button disabled={gonderiliyor} className="w-full bg-black text-white py-4 rounded-xl font-bold hover:bg-gray-800 transition shadow-lg disabled:opacity-50">{gonderiliyor ? "GÜVENLİ SAYFAYA BAĞLANILIYOR..." : "ÖDEME EKRANINA GİT"}</button>
                             </form>
                         </div>
                     )}
-
-                    {/* IBAN ALANI */}
                     {odemeYontemi === 'iban' && (
                         <div className="space-y-5 animate-in fade-in">
                             <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 text-sm space-y-3 relative">
@@ -325,14 +223,9 @@ export default function Home() {
                             </div>
                             <form onSubmit={bildirimGonder} className="space-y-3">
                                 <p className="text-sm font-bold text-gray-700">Ödemeyi Yaptıktan Sonra Formu Doldurun 👇</p>
-                                <div className="flex gap-2">
-                                    <input required type="text" placeholder="Ad Soyad" className="flex-1 p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-amber-500" value={form.adSoyad} onChange={(e) => setForm({...form, adSoyad: e.target.value})} />
-                                    <input required type="number" min="1" placeholder="Adet" className="w-20 p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-amber-500 text-center font-bold" value={form.adet} onChange={(e) => setForm({...form, adet: e.target.value})} />
-                                </div>
+                                <div className="flex gap-2"><input required type="text" placeholder="Ad Soyad" className="flex-1 p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-amber-500" value={form.adSoyad} onChange={(e) => setForm({...form, adSoyad: e.target.value})} /><input required type="number" min="1" placeholder="Adet" className="w-20 p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-amber-500 text-center font-bold" value={form.adet} onChange={(e) => setForm({...form, adet: e.target.value})} /></div>
                                 <input required type="tel" placeholder="Telefon (05...)" className="w-full p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-amber-500" value={form.telefon} onChange={(e) => setForm({...form, telefon: e.target.value})} />
-                                <button disabled={gonderiliyor} className="w-full bg-green-600 text-white py-4 rounded-xl font-bold hover:bg-green-700 transition shadow-lg shadow-green-200 disabled:opacity-50">
-                                    {gonderiliyor ? "GÖNDERİLİYOR..." : "ÖDEMEYİ YAPTIM, BİLDİR"}
-                                </button>
+                                <button disabled={gonderiliyor} className="w-full bg-green-600 text-white py-4 rounded-xl font-bold hover:bg-green-700 transition shadow-lg shadow-green-200 disabled:opacity-50">{gonderiliyor ? "GÖNDERİLİYOR..." : "ÖDEMEYİ YAPTIM, BİLDİR"}</button>
                             </form>
                         </div>
                     )}
@@ -340,23 +233,7 @@ export default function Home() {
             </div>
         </div>
       )}
-
-      {yasalModalAcik && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[80vh]">
-                <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-2xl">
-                    <h3 className="font-bold text-lg text-gray-800">{seciliYasalBaslik}</h3>
-                    <button onClick={() => setYasalModalAcik(false)} className="p-2 hover:bg-gray-200 rounded-full transition"><X size={20}/></button>
-                </div>
-                <div className="p-6 overflow-y-auto whitespace-pre-wrap text-sm text-gray-600 leading-relaxed font-mono bg-white">
-                    {seciliYasalIcerik}
-                </div>
-                <div className="p-4 border-t bg-gray-50 rounded-b-2xl text-right">
-                    <button onClick={() => setYasalModalAcik(false)} className="px-6 py-2 bg-black text-white rounded-lg font-bold hover:bg-gray-800">Kapat</button>
-                </div>
-            </div>
-        </div>
-      )}
+      {yasalModalAcik && (<div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in"><div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[80vh]"><div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-2xl"><h3 className="font-bold text-lg text-gray-800">{seciliYasalBaslik}</h3><button onClick={() => setYasalModalAcik(false)} className="p-2 hover:bg-gray-200 rounded-full transition"><X size={20}/></button></div><div className="p-6 overflow-y-auto whitespace-pre-wrap text-sm text-gray-600 leading-relaxed font-mono bg-white">{seciliYasalIcerik}</div><div className="p-4 border-t bg-gray-50 rounded-b-2xl text-right"><button onClick={() => setYasalModalAcik(false)} className="px-6 py-2 bg-black text-white rounded-lg font-bold hover:bg-gray-800">Kapat</button></div></div></div>)}
     </div>
   );
 }
